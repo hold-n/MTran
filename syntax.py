@@ -315,6 +315,6 @@ class SyntaxEofError(SyntaxError):
 class SyntaxTokenError(SyntaxError):
     def __init__(self, lineno, tok_type, value):
         msg = "Syntax error on line {}. Unexpected token of type '{}': {}".format(
-            p.lineno, p.type, p.value
+            lineno, tok_type, value
         )
         super(SyntaxTokenError, self).__init__(msg)

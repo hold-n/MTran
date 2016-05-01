@@ -2,14 +2,24 @@ import lexis
 import syntax
 import semantics
 
+
 def analyze(data):
     analyzer = syntax.analyzer
-    return analyzer.parse(data)
+    try:
+        result = analyzer.parse(data)
+    except syntax.SyntaxError as e:
+        print e.message
+        result = None
+    return result
 
 
 def interpret(data):
     root_node = analyze(data)
-    root_node.run()
+    if root_node is not None:
+        try:
+            root_node.run()
+        except semantics.SemanticError as e:
+            print e.message
 
 
 def tokenize(data):

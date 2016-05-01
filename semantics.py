@@ -680,7 +680,7 @@ class Variable(object):
 
 class SemanticError(Exception):
     def __init__(self, msg, lineno=0): # TODO: remove default value
-        msg = msg + ', line #{}'.format(lineno)
+        msg = 'Semantic error: {}, line #{}'.format(msg, lineno)
         super(SemanticError, self).__init__(msg)
 
 
@@ -698,7 +698,7 @@ class NotAClassError(SemanticError):
 
 class UndeclaredVariableError(SemanticError):
     def __init__(self, name):
-        msg = 'Operation with undeclared variable "{}"'.format(name)
+        msg = 'operation with undeclared variable "{}"'.format(name)
         super(UndeclaredVariableError, self).__init__(msg)
 
 
@@ -710,13 +710,13 @@ class UndeclaredClassError(SemanticError):
 
 class TypeMismatchError(SemanticError):
     def __init__(self, value, var_type):
-        msg = 'Value {} must be of type {}'.format(value, var_type)
+        msg = 'value {} must be of type {}'.format(value, var_type)
         super(TypeMismatchError, self).__init__(msg)
 
 
 class ParameterNumberError(SemanticError):
     def __init__(self, func_name, expected, got):
-        msg = 'Invalid number of parameters for function {}: expected {}, got {}'.format(
+        msg = 'invalid number of parameters for function {}: expected {}, got {}'.format(
             func_name, expected, got
         )
         super(ParameterError, self).__init__(msg)
