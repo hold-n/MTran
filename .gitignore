@@ -1,0 +1,6 @@
+*.pyc
+*.pdf
+*.odt
+*.out
+parsetab.py
+jane.py
