@@ -88,22 +88,25 @@ def p_expression_negative(p):
     "expression : '-' term %prec UMINUS"
     p[0] = NegativeExpression(p[2])
 
-def p_expression_bool(p):
+def p_expression_comparison(p):
     '''expression : expression '<' expression
                     | expression '>' expression
                     | expression LESS_OR_EQUAL expression
                     | expression MORE_OR_EQUAL expression
                     | expression STRICT_EQUALS expression
                     | expression STRICT_NOT_EQUAL expression
-                    | expression AND expression
-                    | expression OR expression
                     '''
-    pass
+    p[0] = ComparisonExpression(p[2], p[1], p[3])
+
+def p_expression_bool(p):
+    '''expression : expression AND expression
+                    | expression OR expression'''
+    p[0] = BooleanOperationExpression(p[2], p[1], p[3])
 
 def p_expression_arithm(p):
     '''expression : expression '+' term
                     | expression '-' term'''
-    pass
+    p[0] = ArithmeticOperationExpression(p[2], p[1], p[3])
 
 def p_term_trivial(p):
     "term : operand"
@@ -112,7 +115,7 @@ def p_term_trivial(p):
 def p_term(p):
     '''term : term '*' operand
             | term '/' operand'''
-    pass
+    p[0] = ArithmeticOperationExpression(p[2], p[1], p[3])
 
 def p_operand_primitive(p):
     "operand : primitive"
@@ -219,7 +222,7 @@ def p_param_list(p):
     p[0] = p[1]
 
 def p_function_call(p):
-    "function_call : ID '(' operand_list ')'"
+    "function_call : operand '(' operand_list ')'"
     p[0] = FunctionCallExpression(p[1], p[3])
 
 def p_operand_list_empty(p):
@@ -275,8 +278,8 @@ def p_constructor(p):
     p[0] = FunctionValue(p[1], p[3], None, p[5])
 
 def p_new_instance(p):
-    "new_instance : NEW function_call"
-    p[0] = NewInstanceExpression(p[2])
+    "new_instance : NEW ID '(' operand_list ')'"
+    p[0] = NewInstanceExpression(p[2], p[4])
 
 def p_print(p):
     "print : CONSOLE_LOG '(' expression ')'"

@@ -68,7 +68,6 @@ class LanguageItemNode(Node):
                 self._setvar(scope, name, value)
                 return
             node = node.parent
-        raise Exception('Cannot find a parent scope')
 
     def _setvar(self, scope, name, value):
         typecheck(value, var.type)
@@ -79,12 +78,21 @@ class ScopeNode(LanguageItemNode):
     def __init__(self, statements):
         super(ScopeNode, self).__init__('block')
         self.scope = {}
+        self._this = None
         for statement in statements:
             self.add_child(statement)
+
+    def get_this(self):
+        if self._this is not None:
+            return self._this
+        return UndefinedValue()
 
     def run(self):
         for child in self._children:
             child.run()
+
+    def set_this(self, this):
+        self._this = this
 
     def update_scope(self, scope):
         self.scope.update(scope)
@@ -145,7 +153,7 @@ class ReturnNode(LanguageItemNode):
         self.add_child(expression)
 
     def run(self):
-        # TODO: check if in function
+        # TODO: check if both in function and not in contstructor
         result = self._children[0].calculate()
         raise _Return(result)
 
@@ -157,9 +165,17 @@ class ClassDeclarationNode(LanguageItemNode):
         self._name = name
 
     def run(self):
+        self._ensure_class_types()
         class_type = self.cls.gettype()
         var = Variable(self._name, class_type, self.cls)
         self.setvar(self.name, var)
+
+    def _ensure_class_types(self):
+        for member in self.cls.members:
+            if isinstance(member, FunctionValue):
+                self.ensure_func_types(member)
+            else:
+                self.ensure_type(member.type)
 
 
 class PrintNode(LanguageItemNode):
@@ -250,6 +266,69 @@ class NegateExpression(ExpressionNode):
         return BooleanValue(bool_result)
 
 
+class BinaryOperationExpression(ExpressionNode):
+    # TODO: avoid checking for sign in all operations
+    def __init__(self, op, left, right):
+        super(BinaryOperationExpression, self).__init__(op)
+        self._op = op
+        self._left = left
+        self._right = right
+
+    def _bool_values(self):
+        lvalue = self._left.calculate().bool()
+        rvalue = self._right.calculate().bool()
+        return lvalue, rvalue
+
+    def _num_values(self):
+        lvalue = self._left.calculate().num()
+        rvalue = self._right.calculate().num()
+        return lvalue, rvalue
+
+
+class BooleanOperationExpression(BinaryOperationExpression):
+    def calculate(self):
+        lvalue, rvalue = self._bool_values()
+        if self._op == '&&':
+            result = lvalue and rvalue
+        elif self._op == '||':
+            result = lvalue or rvalue
+        return BooleanValue(result)
+
+
+class ArithmeticOperationExpression(BinaryOperationExpression):
+    # TODO: add support for '+' as concatenation
+    def calculate():
+        lvalue, rvalue = self._num_values()
+        if self._op == '+':
+            result = lvalue + rvalue
+        elif self._op == '-':
+            result = lvalue - rvalue
+        elif self._op == '*':
+            result = lvalue * rvalue
+        elif self._op == '/':
+            result = lvalue / rvalue
+        return NumberValue(result)
+
+
+class ComparisonExpression(BinaryOperationExpression):
+    def calculate():
+        # TODO: fix equality comparison
+        lvalue, rvalue = self._num_values()
+        if self._op == '<':
+            result = lvalue < rvalue
+        elif self._op == '>':
+            result = lvalue > rvalue
+        elif self._op == '<=':
+            result = lvalue <= rvalue
+        elif self._op == '>=':
+            result = lvalue >= rvalue
+        elif self._op == '===':
+            retult = lvalue == rvalue
+        elif self.op == '!==':
+            result = lvalue != rvalue
+        return BooleanValue(result)
+
+
 class NegativeExpression(ExpressionNode):
     def __init__(self, expression):
         super(NegateExpression, self).__init__('negation')
@@ -266,33 +345,45 @@ class MemberAccessessExpression(ExpressionNode):
         super(MemberAccessessExpression, self).__init__('member access')
         self.add_child(operand)
         self.name = name
+        self.obj = None
 
     def calculate(self):
         value = self._children[0].calculate()
-        obj = value.obj()
-        return obj[self.name]
+        self.obj = value.obj()
+        return self.obj[self.name].value
 
 
 class FunctionCallExpression(ExpressionNode):
-    def __init__(self, name, params):
+    def __init__(self, operand, params):
         super(FunctionCallExpression, self).__init__('function call')
-        self.name = name
+        self.add_child(operand)
         self.add_children(params)
 
     def calculate(self):
-        values = [child.calculate() for child in self._children]
-        func = self.getvar(self._name).value
+        func = self._get_func()
+        this = self._get_this()
+        values = [child.calculate() for child in self._children[1:]]
+        return func.call(values, this)
+
+    def _get_func(self):
+        func = self._children[0].calculate().obj()
         if not isinstance(func, FunctionValue):
             raise NotAFunctionError(self._name)
-        return func.call(values)
+        return func
+
+    def _get_this(self):
+        this = None
+        if isinstance(self._children[0], MemberAccessessExpression):
+            this = self._children[0].obj
+        return this
 
 
 class NewInstanceExpression(ExpressionNode):
     # TODO: extract common parts with FunctionCallExpression
-    def __init__(self, func_call):
+    def __init__(self, name, params):
         super(NewInstanceExpression, self).__init__('new instance')
-        self._name = func_call.name
-        self.add_children(func_call.iterchildren())
+        self._name = name
+        self.add_children(params)
 
     def calculate(self):
         cls = self.getvar(self._name).value
@@ -308,8 +399,11 @@ class ThisExpression(ExpressionNode):
         super(ThisExpression, self).__init__('this')
 
     def calculate(self):
-        # TODO: find current this
-        pass
+        node = self.parent
+        while node is not None:
+            if isinstance(node, ScopeNode):
+                return node.get_this()
+            node = node.parent
 
 
 # Values
@@ -377,11 +471,9 @@ class StringValue(LanguageContainerValue):
 
 class ObjectValue(LanguageContainerValue):
     def __init__(self, cls, params):
-        super(ObjectValue, self).__init__({})
-        # TOOD: set members as variables similar to scope
-        # TODO: handle None cls as a dev solution
+        members = {var.name : var for var in params}
+        super(ObjectValue, self).__init__(members)
         self.cls = cls
-        self._params = params
 
     def bool(self):
         return True
@@ -401,11 +493,23 @@ class ObjectValue(LanguageContainerValue):
     def __getitem__(self, name):
         if name in self.value:
             return self.value[name]
+        if self.cls is not None and name in self.cls.value:
+            return self.cls[name]
         return UndefinedValue()
 
+    def __iter__(self):
+        for name, var in self.value.iteritems():
+            yield var
+        if self.cls is not None:
+            for member in self.cls:
+                yield member
+
     def __setitem__(self, name, value):
-        # TODO: check if such var exists, typecheck
-        self.value[name] = value
+        var = self.value.get(name)
+        if var is None:
+            raise UndeclaredVariableError(name)
+        typecheck(value, var.type)
+        var.value = value
 
 
 class FunctionValue(ObjectValue):
@@ -419,10 +523,10 @@ class FunctionValue(ObjectValue):
         self.return_type = return_type
         self.block = block
 
-    def call(self, values):
+    def call(self, values, this=None):
         self._check_values(values)
         try:
-            self._run(values)
+            self._run(values, this)
         except _Return as r:
             return r.value
         return UndefinedValue()
@@ -443,11 +547,12 @@ class FunctionValue(ObjectValue):
         except TypeMismatchError:
             raise ParameterError('Invalid parameter type')
 
-    def _run(self, values):
+    def _run(self, values, this):
         scope = {}
         for value, param in zip(values, self.params):
             scope[param.name] = value
         self.block.update_scope(scope)
+        self.block.set_this(this)
         self.block.run()
 
 
@@ -458,33 +563,35 @@ class ClassValue(ObjectValue):
         self.members = members
         self._fields = [m for m in members if isinstance(m, Variable)]
         self._methods = [m for m in members if isinstance(m, FunctionValue)]
-        self._register_constructor()
+        self._constructor = None
+        self._register_methods()
 
     def instantiate(self, values):
         result = self._instantiate()
         if self._constructor is not None:
-            # TODO: call constructor
-            pass
+            self._constructor.call(values, result)
         return result
 
     def _instantiate(self):
         params = self._fields[:]
-        for method in self._methods:
-            var = Variable(method.name, method.gettype(), method)
-            params.append(var)
+        for param in params:
+            param.value = None
         obj = ObjectValue(self, params)
         return obj
 
-    def _register_constructor(self):
-        # TODO: avoid using the keyword directly
-        constructors = [m for m in self.methods if m.name == 'constructor']
-        num = len(constructors)
-        if num > 2:
-            raise SemanticError('Multiple constructors in one class')
-        constructor = None
-        if num == 1:
-            constructor = constructors[0]
-        self._constructor = constructor
+    def _register_methods(self):
+        for method in self._methods:
+            # TODO: avoid using the keyword directly
+            if method.name == 'constructor':
+                self._register_constructor(method)
+            else:
+                var = Variable(method.name, method.gettype(), method)
+                self[method.name] = var
+
+    def _register_constructor(self, method):
+        if self._constructor is not None:
+            raise SemanticError('Multiple constructors in a class')
+        self._constructor = method
 
 
 class NullValue(LanguageValue):
