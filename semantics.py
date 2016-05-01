@@ -1,4 +1,4 @@
-# TODO: supply line numbers
+# TODO: ! supply line numbers !
 
 # TODO: split in multiple files
 # TODO: override __repr__ everywhere properly instead of node_type => remove 'type'?
@@ -233,7 +233,6 @@ class VariableDeclarationNode(LanguageItemNode):
 
     def run(self):
         self.ensure_type(self.var.type)
-        self.var.value = None
         self.setvar(self.var.name, self.var)
 
 
@@ -587,7 +586,7 @@ class ClassValue(ObjectValue):
     def _instantiate(self):
         params = []
         for param in self._fields:
-            var = Variable(param.name, param.type, None)
+            var = Variable(param.name, param.type)
             params.append(var)
         obj = ObjectValue(self, params)
         return obj
@@ -608,6 +607,7 @@ class ClassValue(ObjectValue):
 
 
 class NullValue(LanguageValue):
+    # TODO: make singleton
     def bool(self):
         return False
 
@@ -622,6 +622,7 @@ class NullValue(LanguageValue):
 
 
 class UndefinedValue(LanguageValue):
+    # TODO: make singleton
     def bool(self):
         return False
 
@@ -646,7 +647,6 @@ _VALUE_TYPE_MAP = {
 
 
 def typecheck(value, var_type):
-
     if isinstance(value, NullValue) or isinstance(value, UndefinedValue):
         return
     cur_type = type(value)
@@ -669,7 +669,7 @@ class Variable(object):
     def __init__(self, name, var_type, value=None):
         self.name = name
         self.type = var_type
-        self.value = value
+        self.value = value if value is not None else UndefinedValue()
 
     def __repr__(self):
         return 'Variable({}, {}, {})'.format(self.name, self.type, self.value)
