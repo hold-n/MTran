@@ -1,5 +1,5 @@
 # TODO: split in multiple files
-# TODO: override __repr__ everywhere
+# TODO: override __repr__ everywhere properly instead of node_type
 # TODO: get rid of 'name' in Variable?
 
 class Node(object):
@@ -683,7 +683,11 @@ class Variable(object):
 
 
 class SemanticError(Exception):
-    pass
+    def __init__(self, lineno, msg=None):
+        if msg == None:
+            msg = 'Semantic error on line #{}'.format(lineno)
+        super(SemanticError, self).__init__(msg)
+        self.lineno = lineno
 
 
 class NotAFunctionError(SemanticError):
