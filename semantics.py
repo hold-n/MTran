@@ -1,5 +1,7 @@
+# TODO: supply line numbers
+
 # TODO: split in multiple files
-# TODO: override __repr__ everywhere properly instead of node_type
+# TODO: override __repr__ everywhere properly instead of node_type => remove 'type'?
 # TODO: get rid of 'name' in Variable?
 
 class Node(object):
@@ -10,8 +12,7 @@ class Node(object):
 
     def add_child(self, child):
         self._children.append(child)
-        if isinstance(child, Node): # TODO: remove check when finished
-            child.parent = self
+        child.parent = self
 
     def add_children(self, children):
         for child in children:
@@ -57,8 +58,7 @@ class LanguageItemNode(Node):
             return
         var = self.getvar(type_name)
         if not isinstance(var.value, ClassValue):
-            # TODO: use separate error for types
-            raise UndeclaredVariableError(type_name)
+            raise UndeclaredClassError(type_name)
 
     def run(self):
         raise NotImplementedError()
@@ -307,7 +307,7 @@ class BooleanOperationExpression(BinaryOperationExpression):
 
 
 class ArithmeticOperationExpression(BinaryOperationExpression):
-    # TODO: add support for '+' as concatenation
+    # TODO: add support for '+' as string concatenation
     def calculate(self):
         lvalue, rvalue = self._num_values()
         if self._op == '+':
@@ -399,8 +399,7 @@ class NewInstanceExpression(ExpressionNode):
     def calculate(self):
         cls = self.getvar(self._name).value
         if not isinstance(cls, ClassValue):
-            # TODO: different error for classes?
-            raise NotAFunctionError(self._name)
+            raise NotAClassError(self._name)
         params = [child.calculate() for child in self._children]
         return cls.instantiate(params)
 
@@ -551,12 +550,9 @@ class FunctionValue(ObjectValue):
 
     def _check_values(self, values):
         if len(values) != len(self.params):
-            raise ParameterError(self.name, )
-        try:
-            for value, param in zip(values, self.params):
-                typecheck(value, param.type)
-        except TypeMismatchError:
-            raise ParameterError('Invalid parameter type')
+            raise ParameterNumberError(self.name, len(self.params), len(values))
+        for value, param in zip(values, self.params):
+            typecheck(value, param.type)
 
     def _run(self, values, this):
         scope = {}
@@ -683,11 +679,9 @@ class Variable(object):
 
 
 class SemanticError(Exception):
-    def __init__(self, lineno, msg=None):
-        if msg == None:
-            msg = 'Semantic error on line #{}'.format(lineno)
+    def __init__(self, msg, lineno=0): # TODO: remove default value
+        msg = msg + ', line #{}'.format(lineno)
         super(SemanticError, self).__init__(msg)
-        self.lineno = lineno
 
 
 class NotAFunctionError(SemanticError):
@@ -696,9 +690,21 @@ class NotAFunctionError(SemanticError):
         super(NotAFunctionError, self).__init__(msg)
 
 
+class NotAClassError(SemanticError):
+    def __init__(self, name):
+        msg = '{} is not a class'.format(name)
+        super(NotAClassError, self).__init__(msg)
+
+
 class UndeclaredVariableError(SemanticError):
     def __init__(self, name):
         msg = 'Operation with undeclared variable "{}"'.format(name)
+        super(UndeclaredVariableError, self).__init__(msg)
+
+
+class UndeclaredClassError(SemanticError):
+    def __init__(self, name):
+        msg = 'specifying undeclared class "{}"'.format(name)
         super(UndeclaredVariableError, self).__init__(msg)
 
 
@@ -708,8 +714,9 @@ class TypeMismatchError(SemanticError):
         super(TypeMismatchError, self).__init__(msg)
 
 
-class ParameterError(SemanticError):
-    def __init__(self, func_name, name, value):
-        msg = 'Invalid parameter {} in function {}: {}'.format(
-            name, func_name, value
+class ParameterNumberError(SemanticError):
+    def __init__(self, func_name, expected, got):
+        msg = 'Invalid number of parameters for function {}: expected {}, got {}'.format(
+            func_name, expected, got
         )
+        super(ParameterError, self).__init__(msg)

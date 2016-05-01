@@ -34,8 +34,8 @@ def main():
         data = f.read()
     # print_token_stat(data)
     # print_token_list(data)
-    print_tree(data)
-    # parser.interpret(data)
+    # print_tree(data)
+    parser.interpret(data)
 
 
 def _print_tree(node, indent=0):
