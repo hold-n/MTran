@@ -1,4 +1,6 @@
 # TODO: split in multiple files
+# TODO: override __repr__ everywhere
+# TODO: get rid of 'name' in Variable?
 
 class Node(object):
     def __init__(self, node_type):
@@ -17,26 +19,26 @@ class Node(object):
 
     # TODO: incapsulate scopes traversal
     def getvar(self, name):
-        parent = self.parent
-        while parent is not None:
-            if isinstance(parent, ScopeNode) and name in parent.scope:
-                value = self._getvar(parent.scope, name)
+        node = self
+        while node is not None:
+            if isinstance(node, ScopeNode) and name in node.scope:
+                value = self._getvar(node.scope, name)
                 return value
-            parent = parent.parent
+            node = node.parent
         raise UndeclaredVariableError(name)
 
     def iterchildren(self):
         for child in self._children:
             yield child
 
-    def __repr__(self):
-        return self.type
-
     def _getvar(self, scope, name):
         value = scope[name]
         if value is not None:
             return value
         return UndefinedValue()
+
+    def __repr__(self):
+        return 'Node({})'.format(self.type)
 
 
 # Control flow nodes
@@ -65,13 +67,9 @@ class LanguageItemNode(Node):
         node = self
         while node is not None:
             if isinstance(node, ScopeNode):
-                self._setvar(scope, name, value)
+                node.scope[name] = value
                 return
             node = node.parent
-
-    def _setvar(self, scope, name, value):
-        typecheck(value, var.type)
-        var.value = value
 
 
 class ScopeNode(LanguageItemNode):
@@ -96,6 +94,15 @@ class ScopeNode(LanguageItemNode):
 
     def update_scope(self, scope):
         self.scope.update(scope)
+
+
+class ExpressionStatementNode(LanguageItemNode):
+    def __init__(self, expression):
+        super(ExpressionStatementNode, self).__init__('expression statement')
+        self.add_child(expression)
+
+    def run(self):
+        self._children[0].calculate()
 
 
 class VariableAssignmentNode(LanguageItemNode):
@@ -168,12 +175,13 @@ class ClassDeclarationNode(LanguageItemNode):
         self._ensure_class_types()
         class_type = self.cls.gettype()
         var = Variable(self._name, class_type, self.cls)
-        self.setvar(self.name, var)
+        self.setvar(self._name, var)
 
     def _ensure_class_types(self):
         for member in self.cls.members:
             if isinstance(member, FunctionValue):
-                self.ensure_func_types(member)
+                if not member.name == 'constructor':
+                    self.ensure_func_types(member)
             else:
                 self.ensure_type(member.type)
 
@@ -224,9 +232,9 @@ class VariableDeclarationNode(LanguageItemNode):
         self.var = var
 
     def run(self):
-        self.ensure_type(var.type)
-        var.value = None
-        self.setvar(var.name, var)
+        self.ensure_type(self.var.type)
+        self.var.value = None
+        self.setvar(self.var.name, self.var)
 
 
 # Expression nodes
@@ -252,7 +260,10 @@ class VariableExpression(ExpressionNode):
         self._name = name
 
     def calculate(self):
-        return self.getvar(name).value
+        return self.getvar(self._name).value
+
+    def __repr__(self):
+        return 'variable {}'.format(self._name)
 
 
 class NegateExpression(ExpressionNode):
@@ -271,17 +282,17 @@ class BinaryOperationExpression(ExpressionNode):
     def __init__(self, op, left, right):
         super(BinaryOperationExpression, self).__init__(op)
         self._op = op
-        self._left = left
-        self._right = right
+        self.add_child(left)
+        self.add_child(right)
 
     def _bool_values(self):
-        lvalue = self._left.calculate().bool()
-        rvalue = self._right.calculate().bool()
+        lvalue = self._children[0].calculate().bool()
+        rvalue = self._children[1].calculate().bool()
         return lvalue, rvalue
 
     def _num_values(self):
-        lvalue = self._left.calculate().num()
-        rvalue = self._right.calculate().num()
+        lvalue = self._children[0].calculate().num()
+        rvalue = self._children[1].calculate().num()
         return lvalue, rvalue
 
 
@@ -297,7 +308,7 @@ class BooleanOperationExpression(BinaryOperationExpression):
 
 class ArithmeticOperationExpression(BinaryOperationExpression):
     # TODO: add support for '+' as concatenation
-    def calculate():
+    def calculate(self):
         lvalue, rvalue = self._num_values()
         if self._op == '+':
             result = lvalue + rvalue
@@ -311,8 +322,8 @@ class ArithmeticOperationExpression(BinaryOperationExpression):
 
 
 class ComparisonExpression(BinaryOperationExpression):
-    def calculate():
-        # TODO: fix equality comparison
+    def calculate(self):
+        # TODO: make equality comparison work not only for numbers
         lvalue, rvalue = self._num_values()
         if self._op == '<':
             result = lvalue < rvalue
@@ -323,8 +334,8 @@ class ComparisonExpression(BinaryOperationExpression):
         elif self._op == '>=':
             result = lvalue >= rvalue
         elif self._op == '===':
-            retult = lvalue == rvalue
-        elif self.op == '!==':
+            result = lvalue == rvalue
+        elif self._op == '!==':
             result = lvalue != rvalue
         return BooleanValue(result)
 
@@ -340,9 +351,9 @@ class NegativeExpression(ExpressionNode):
         return NumberValue(num_result)
 
 
-class MemberAccessessExpression(ExpressionNode):
+class MemberAccessExpression(ExpressionNode):
     def __init__(self, operand, name):
-        super(MemberAccessessExpression, self).__init__('member access')
+        super(MemberAccessExpression, self).__init__('member access')
         self.add_child(operand)
         self.name = name
         self.obj = None
@@ -373,7 +384,7 @@ class FunctionCallExpression(ExpressionNode):
 
     def _get_this(self):
         this = None
-        if isinstance(self._children[0], MemberAccessessExpression):
+        if isinstance(self._children[0], MemberAccessExpression):
             this = self._children[0].obj
         return this
 
@@ -424,7 +435,7 @@ class LanguageValue(object):
         raise NotImplementedError()
 
     def __repr__(self):
-        return self.str()
+        return 'Value({})'.format(self.str())
 
 
 class LanguageContainerValue(LanguageValue):
@@ -478,7 +489,7 @@ class ObjectValue(LanguageContainerValue):
     def bool(self):
         return True
 
-    def getttype(self):
+    def gettype(self):
         return 'object'
 
     def num(self):
@@ -540,7 +551,7 @@ class FunctionValue(ObjectValue):
 
     def _check_values(self, values):
         if len(values) != len(self.params):
-            raise ParameterError('Invalid number of parameters passed')
+            raise ParameterError(self.name, )
         try:
             for value, param in zip(values, self.params):
                 typecheck(value, param.type)
@@ -550,7 +561,8 @@ class FunctionValue(ObjectValue):
     def _run(self, values, this):
         scope = {}
         for value, param in zip(values, self.params):
-            scope[param.name] = value
+            var = Variable(param.name, param.type, value)
+            scope[param.name] = var
         self.block.update_scope(scope)
         self.block.set_this(this)
         self.block.run()
@@ -566,6 +578,10 @@ class ClassValue(ObjectValue):
         self._constructor = None
         self._register_methods()
 
+    def gettype(self):
+        # TODO: specify
+        return 'class'
+
     def instantiate(self, values):
         result = self._instantiate()
         if self._constructor is not None:
@@ -573,9 +589,10 @@ class ClassValue(ObjectValue):
         return result
 
     def _instantiate(self):
-        params = self._fields[:]
-        for param in params:
-            param.value = None
+        params = []
+        for param in self._fields:
+            var = Variable(param.name, param.type, None)
+            params.append(var)
         obj = ObjectValue(self, params)
         return obj
 
@@ -626,18 +643,19 @@ class UndefinedValue(LanguageValue):
 
 
 _VALUE_TYPE_MAP = {
-    'number': NumberValue,
-    'string': StringValue,
-    'boolean': BooleanValue,
+    NumberValue: 'number',
+    StringValue: 'string',
+    BooleanValue: 'boolean',
 }
 
 
 def typecheck(value, var_type):
+
     if isinstance(value, NullValue) or isinstance(value, UndefinedValue):
         return
-    if var_type in _VALUE_TYPE_MAP:
-        necessary_type = _VALUE_TYPE_MAP[var_type]
-        if isinstance(value, necessary_type):
+    cur_type = type(value)
+    if cur_type in _VALUE_TYPE_MAP:
+        if var_type == _VALUE_TYPE_MAP[cur_type]:
             return
     else:
         cls_name = value.cls.name
@@ -656,6 +674,9 @@ class Variable(object):
         self.name = name
         self.type = var_type
         self.value = value
+
+    def __repr__(self):
+        return 'Variable({}, {}, {})'.format(self.name, self.type, self.value)
 
 
 # Errors
@@ -684,4 +705,7 @@ class TypeMismatchError(SemanticError):
 
 
 class ParameterError(SemanticError):
-    pass
+    def __init__(self, func_name, name, value):
+        msg = 'Invalid parameter {} in function {}: {}'.format(
+            name, func_name, value
+        )

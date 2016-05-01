@@ -1,6 +1,6 @@
 import lexis
 import syntax
-
+import semantics
 
 def analyze(data):
     analyzer = syntax.analyzer

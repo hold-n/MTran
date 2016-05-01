@@ -26,7 +26,7 @@ def print_token_list(data):
 
 def print_tree(data):
     root = parser.analyze(data)
-    # _print_tree(root)
+    _print_tree(root)
 
 
 def main():
@@ -39,7 +39,7 @@ def main():
 
 
 def _print_tree(node, indent=0):
-    pad = ' ' * indent
+    pad = '  ' * indent
     print pad, node
     next_indent = indent + 1
     for child in node.iterchildren():

@@ -70,11 +70,14 @@ def p_statement_return(p):
     p[0] = ReturnNode(p[2])
 
 def p_statement(p):
-    '''statement : expression
-                    | var_decl
+    '''statement : var_decl
                     | assignment
                     | print'''
     p[0] = p[1]
+
+def p_statement_expr(p):
+    "statement : expression"
+    p[0] = ExpressionStatementNode(p[1])
 
 def p_expression_trivial(p):
     "expression : term"
@@ -164,7 +167,7 @@ def p_operand_complex(p):
 def p_member_access(p):
     '''member_access : operand '.' ID
                         | member_access '.' ID'''
-    p[0] = MemberAccessessExpression(p[1], p[3])
+    p[0] = MemberAccessExpression(p[1], p[3])
 
 def p_assignment(p):
     "assignment : ID '=' expression"
@@ -176,7 +179,7 @@ def p_assignment(p):
 
 def p_assignment_member(p):
     "assignment : member_access '=' expression"
-    p[0] = MemberAccessessExpression(p[1], p[3])
+    p[0] = MemberAssignmentNode(p[1], p[3])
 
 def p_if(p):
     '''if : if_no_else
