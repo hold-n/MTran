@@ -1,12 +1,11 @@
-# TODO: ! supply line numbers !
-
 # TODO: override __repr__ everywhere properly instead of node_type => remove 'type'?
 # TODO: split into multiple files
 # TODO: get rid of 'name' in Variable?
 
 class Node(object):
-    def __init__(self, node_type):
+    def __init__(self, lineno, node_type):
         self.type = node_type
+        self.lineno = lineno
         self.parent = None
         self._children = []
 
@@ -26,7 +25,7 @@ class Node(object):
                 value = self._getvar(node.scope, name)
                 return value
             node = node.parent
-        raise UndeclaredVariableError(name)
+        raise UndeclaredVariableError(name, self.lineno)
 
     def iterchildren(self):
         for child in self._children:
@@ -58,7 +57,7 @@ class LanguageItemNode(Node):
             return
         var = self.getvar(type_name)
         if not isinstance(var.value, ClassValue):
-            raise UndeclaredClassError(type_name)
+            raise UndeclaredClassError(type_name, self.lineno)
 
     def run(self):
         raise NotImplementedError()
@@ -73,8 +72,8 @@ class LanguageItemNode(Node):
 
 
 class ScopeNode(LanguageItemNode):
-    def __init__(self, statements):
-        super(ScopeNode, self).__init__('block')
+    def __init__(self, lineno, statements):
+        super(ScopeNode, self).__init__(lineno, 'block')
         self.scope = {}
         self._this = None
         for statement in statements:
@@ -97,8 +96,8 @@ class ScopeNode(LanguageItemNode):
 
 
 class ExpressionStatementNode(LanguageItemNode):
-    def __init__(self, expression):
-        super(ExpressionStatementNode, self).__init__('expression statement')
+    def __init__(self, lineno, expression):
+        super(ExpressionStatementNode, self).__init__(lineno, 'expression statement')
         self.add_child(expression)
 
     def run(self):
@@ -106,22 +105,22 @@ class ExpressionStatementNode(LanguageItemNode):
 
 
 class VariableAssignmentNode(LanguageItemNode):
-    def __init__(self, name, expression):
-        super(VariableAssignmentNode, self).__init__('variable assignment')
+    def __init__(self, lineno, name, expression):
+        super(VariableAssignmentNode, self).__init__(lineno, 'variable assignment')
         self._name = name
         self.add_child(expression)
 
     def run(self):
         value = self._children[0].calculate()
         var = self.getvar(self._name)
-        typecheck(value, var.type)
+        typecheck(self.lineno, self._name, value, var.type)
         var.value = value
 
 
 class DeclaredVariableAssignmentNode(VariableAssignmentNode):
-    def __init__(self, var_decl, expression):
+    def __init__(self, lineno, var_decl, expression):
         name = var_decl.var.name
-        super(DeclaredVariableAssignmentNode, self).__init__(name, expression)
+        super(DeclaredVariableAssignmentNode, self).__init__(lineno, name, expression)
         self.add_child(var_decl)
 
     def run(self):
@@ -130,21 +129,21 @@ class DeclaredVariableAssignmentNode(VariableAssignmentNode):
 
 
 class MemberAssignmentNode(LanguageItemNode):
-    def __init__(self, member_node, expression):
-        super(MemberAssignmentNode, self).__init__('member assignment')
+    def __init__(self, lineno, member_node, expression):
+        super(MemberAssignmentNode, self).__init__(lineno, 'member assignment')
         self.add_child(member_node)
         self.add_child(expression)
 
     def run(self):
         member_node = self._children[0]
         member_node_child = next(iter(member_node.iterchildren()))
-        obj = member_node_child.calculate().obj()
-        obj[member_node.name] = self._children[1].calculate()
+        obj = member_node_child.calculate().obj(self.lineno)
+        obj.set_member(self.lineno, member_node.name, self._children[1].calculate())
 
 
 class FunctionDeclarationNode(LanguageItemNode):
-    def __init__(self, func):
-        super(FunctionDeclarationNode, self).__init__('function declaration')
+    def __init__(self, lineno, func):
+        super(FunctionDeclarationNode, self).__init__(lineno, 'function declaration')
         self.func = func
 
     def run(self):
@@ -155,8 +154,8 @@ class FunctionDeclarationNode(LanguageItemNode):
 
 
 class ReturnNode(LanguageItemNode):
-    def __init__(self, expression):
-        super(ReturnNode, self).__init__('return statement')
+    def __init__(self, lineno, expression):
+        super(ReturnNode, self).__init__(lineno, 'return statement')
         self.add_child(expression)
 
     def run(self):
@@ -166,9 +165,9 @@ class ReturnNode(LanguageItemNode):
 
 
 class ClassDeclarationNode(LanguageItemNode):
-    def __init__(self, name, members):
-        super(ClassDeclarationNode, self).__init__('class declaration')
-        self.cls = ClassValue(name, members)
+    def __init__(self, lineno, name, members):
+        super(ClassDeclarationNode, self).__init__(lineno, 'class declaration')
+        self.cls = ClassValue(lineno, name, members)
         self._name = name
 
     def run(self):
@@ -187,8 +186,8 @@ class ClassDeclarationNode(LanguageItemNode):
 
 
 class PrintNode(LanguageItemNode):
-    def __init__(self, expression):
-        super(PrintNode, self).__init__('print statement')
+    def __init__(self, lineno, expression):
+        super(PrintNode, self).__init__(lineno, 'print statement')
         self.add_child(expression)
 
     def run(self):
@@ -196,8 +195,8 @@ class PrintNode(LanguageItemNode):
 
 
 class IfNode(LanguageItemNode):
-    def __init__(self, condition, block):
-        super(IfNode, self).__init__('if statement')
+    def __init__(self, lineno, condition, block):
+        super(IfNode, self).__init__(lineno, 'if statement')
         self.add_child(condition)
         self.add_child(block)
 
@@ -216,8 +215,8 @@ class IfNode(LanguageItemNode):
 
 
 class WhileLoopNode(LanguageItemNode):
-    def __init__(self, condition, block):
-        super(WhileLoopNode, self).__init__('while loop')
+    def __init__(self, lineno, condition, block):
+        super(WhileLoopNode, self).__init__(lineno, 'while loop')
         self.add_child(condition)
         self.add_child(block)
 
@@ -227,8 +226,8 @@ class WhileLoopNode(LanguageItemNode):
 
 
 class VariableDeclarationNode(LanguageItemNode):
-    def __init__(self, var):
-        super(VariableDeclarationNode, self).__init__('variable declaration')
+    def __init__(self, lineno, var):
+        super(VariableDeclarationNode, self).__init__(lineno, 'variable declaration')
         self.var = var
 
     def run(self):
@@ -245,8 +244,8 @@ class ExpressionNode(Node):
 
 
 class PrimitiveValueExpression(ExpressionNode):
-    def __init__(self, value):
-        super(PrimitiveValueExpression, self).__init__('primitive value')
+    def __init__(self, lineno, value):
+        super(PrimitiveValueExpression, self).__init__(lineno, 'primitive value')
         self._value = value
 
     def calculate(self):
@@ -254,8 +253,8 @@ class PrimitiveValueExpression(ExpressionNode):
 
 
 class VariableExpression(ExpressionNode):
-    def __init__(self, name):
-        super(VariableExpression, self).__init__('variable')
+    def __init__(self, lineno, name):
+        super(VariableExpression, self).__init__(lineno, 'variable')
         self._name = name
 
     def calculate(self):
@@ -266,8 +265,8 @@ class VariableExpression(ExpressionNode):
 
 
 class NegateExpression(ExpressionNode):
-    def __init__(self, expression):
-        super(NegateExpression, self).__init__('boolean negation')
+    def __init__(self, lineno, expression):
+        super(NegateExpression, self).__init__(lineno, 'boolean negation')
         self.add_child(expression)
 
     def calculate(self):
@@ -278,8 +277,8 @@ class NegateExpression(ExpressionNode):
 
 class BinaryOperationExpression(ExpressionNode):
     # TODO: avoid checking for sign in all operations
-    def __init__(self, op, left, right):
-        super(BinaryOperationExpression, self).__init__(op)
+    def __init__(self, lineno, op, left, right):
+        super(BinaryOperationExpression, self).__init__(lineno, op)
         self._op = op
         self.add_child(left)
         self.add_child(right)
@@ -340,8 +339,8 @@ class ComparisonExpression(BinaryOperationExpression):
 
 
 class NegativeExpression(ExpressionNode):
-    def __init__(self, expression):
-        super(NegateExpression, self).__init__('negation')
+    def __init__(self, lineno, expression):
+        super(NegateExpression, self).__init__(lineno, 'negation')
         self.add_child(expression)
 
     def calculate(self):
@@ -351,21 +350,21 @@ class NegativeExpression(ExpressionNode):
 
 
 class MemberAccessExpression(ExpressionNode):
-    def __init__(self, operand, name):
-        super(MemberAccessExpression, self).__init__('member access')
+    def __init__(self, lineno, operand, name):
+        super(MemberAccessExpression, self).__init__(lineno, 'member access')
         self.add_child(operand)
         self.name = name
         self.obj = None
 
     def calculate(self):
         value = self._children[0].calculate()
-        self.obj = value.obj()
-        return self.obj[self.name].value
+        self.obj = value.obj(self.lineno)
+        return self.obj.get_member(self.name).value
 
 
 class FunctionCallExpression(ExpressionNode):
-    def __init__(self, operand, params):
-        super(FunctionCallExpression, self).__init__('function call')
+    def __init__(self, lineno, operand, params):
+        super(FunctionCallExpression, self).__init__(lineno, 'function call')
         self.add_child(operand)
         self.add_children(params)
 
@@ -373,12 +372,12 @@ class FunctionCallExpression(ExpressionNode):
         func = self._get_func()
         this = self._get_this()
         values = [child.calculate() for child in self._children[1:]]
-        return func.call(values, this)
+        return func.call(values, self.lineno, this)
 
     def _get_func(self):
-        func = self._children[0].calculate().obj()
+        func = self._children[0].calculate().obj(self.lineno)
         if not isinstance(func, FunctionValue):
-            raise NotAFunctionError(self._name)
+            raise NotAFunctionError(self._name, self.lineno)
         return func
 
     def _get_this(self):
@@ -390,22 +389,22 @@ class FunctionCallExpression(ExpressionNode):
 
 class NewInstanceExpression(ExpressionNode):
     # TODO: extract common parts with FunctionCallExpression
-    def __init__(self, name, params):
-        super(NewInstanceExpression, self).__init__('new instance')
+    def __init__(self, lineno, name, params):
+        super(NewInstanceExpression, self).__init__(lineno, 'new instance')
         self._name = name
         self.add_children(params)
 
     def calculate(self):
         cls = self.getvar(self._name).value
         if not isinstance(cls, ClassValue):
-            raise NotAClassError(self._name)
+            raise NotAClassError(self._name, self.lineno)
         params = [child.calculate() for child in self._children]
-        return cls.instantiate(params)
+        return cls.instantiate(params, self.lineno)
 
 
 class ThisExpression(ExpressionNode):
-    def __init__(self):
-        super(ThisExpression, self).__init__('this')
+    def __init__(self, lineno):
+        super(ThisExpression, self).__init__(lineno, 'this')
 
     def calculate(self):
         node = self.parent
@@ -419,13 +418,14 @@ class ThisExpression(ExpressionNode):
 
 
 class LanguageValue(object):
+    # TODO: supply lineno for all methods
     def bool(self):
         raise NotImplementedError()
 
     def num(self):
         raise NotImplementedError()
 
-    def obj(self):
+    def obj(self, lineno):
         # TODO: add wrappers for primitives
         raise NotImplementedError()
 
@@ -433,7 +433,7 @@ class LanguageValue(object):
         raise NotImplementedError()
 
     def __repr__(self):
-        return 'Value({})'.format(self.str())
+        return self.str()
 
 
 class LanguageContainerValue(LanguageValue):
@@ -479,9 +479,10 @@ class StringValue(LanguageContainerValue):
 
 
 class ObjectValue(LanguageContainerValue):
-    def __init__(self, cls, params):
+    def __init__(self, lineno, cls, params):
         members = {var.name : var for var in params}
         super(ObjectValue, self).__init__(members)
+        self.lineno = lineno
         self.cls = cls
 
     def bool(self):
@@ -493,18 +494,28 @@ class ObjectValue(LanguageContainerValue):
     def num(self):
         return 0
 
-    def obj(self):
+    def obj(self, lineno):
         return self
 
     def str(self):
         return str(self.value)
 
-    def __getitem__(self, name):
+    # TODO: supply lineno
+    def get_member(self, name):
         if name in self.value:
             return self.value[name]
         if self.cls is not None and name in self.cls.value:
-            return self.cls[name]
+            return self.cls.get_member(name)
         return UndefinedValue()
+
+    def set_member(self, lineno, name, value):
+        var = self.value.get(name)
+        if var is None:
+            cls_name = self.cls.name if self.cls is not None else 'None'
+            # TODO: supply correct line number
+            raise NoMemberError(cls_name, name, lineno)
+        typecheck(self.lineno, name, value, var.type)
+        var.value = value
 
     def __iter__(self):
         for name, var in self.value.iteritems():
@@ -513,18 +524,10 @@ class ObjectValue(LanguageContainerValue):
             for member in self.cls:
                 yield member
 
-    def __setitem__(self, name, value):
-        var = self.value.get(name)
-        if var is None:
-            cls_name = self.cls.name if self.cls is not None else 'None'
-            raise NoMemberError(cls_name, name)
-        typecheck(value, var.type)
-        var.value = value
-
 
 class FunctionValue(ObjectValue):
-    def __init__(self, name, params, return_type, block):
-        super(FunctionValue, self).__init__(None, [])
+    def __init__(self, lineno, name, params, return_type, block):
+        super(FunctionValue, self).__init__(lineno, None, [])
         # TODO: support for checking return types
         if not isinstance(block, ScopeNode):
             raise Exception('You must pass a block to a function value')
@@ -533,7 +536,7 @@ class FunctionValue(ObjectValue):
         self.return_type = return_type
         self.block = block
 
-    def call(self, values, this=None):
+    def call(self, values, lineno, this=None):
         self._check_values(values)
         try:
             self._run(values, this)
@@ -550,9 +553,11 @@ class FunctionValue(ObjectValue):
 
     def _check_values(self, values):
         if len(values) != len(self.params):
-            raise ParameterNumberError(self.name, len(self.params), len(values))
+            raise ParameterNumberError(
+                self.name, len(self.params), len(values), self.lineno
+            )
         for value, param in zip(values, self.params):
-            typecheck(value, param.type)
+            typecheck(self.lineno, param.name, value, param.type)
 
     def _run(self, values, this):
         scope = {}
@@ -565,8 +570,8 @@ class FunctionValue(ObjectValue):
 
 
 class ClassValue(ObjectValue):
-    def __init__(self, name, members):
-        super(ClassValue, self).__init__(None, [])
+    def __init__(self, lineno, name, members):
+        super(ClassValue, self).__init__(lineno, None, [])
         self.name = name
         self.members = members
         self._fields = [m for m in members if isinstance(m, Variable)]
@@ -578,17 +583,17 @@ class ClassValue(ObjectValue):
         # TODO: specify
         return 'class'
 
-    def instantiate(self, values):
-        result = self._instantiate()
-        self._constructor.call(values, result)
+    def instantiate(self, values, lineno):
+        result = self._instantiate(lineno)
+        self._constructor.call(values, lineno, result)
         return result
 
-    def _instantiate(self):
+    def _instantiate(self, lineno):
         params = []
         for param in self._fields:
             var = Variable(param.name, param.type)
             params.append(var)
-        obj = ObjectValue(self, params)
+        obj = ObjectValue(lineno, self, params)
         return obj
 
     def _register_methods(self):
@@ -603,40 +608,42 @@ class ClassValue(ObjectValue):
 
     def _register_constructor(self, method):
         if self._constructor is not None:
-            raise MultipleConstructorsError(self.name)
+            raise MultipleConstructorsError(self.name, self.lineno)
         self._constructor = method
 
     def _try_add_constructor(self):
         if self._constructor is None:
-            block = ScopeNode([])
-            self._constructor = FunctionValue('constructor', [], None, block)
+            block = ScopeNode(self.lineno, [])
+            self._constructor = FunctionValue(
+                self.lineno, 'constructor', [], None, block
+            )
 
 
 class NullValue(LanguageValue):
-    # TODO: make singleton
+    # TODO: make a singleton
     def bool(self):
         return False
 
     def num(self):
         return 0
 
-    def obj(self, name):
-        raise AttributeError('Null reference exception')
+    def obj(self, lineno):
+        raise CastError(self, 'object', lineno)
 
     def str(self):
         return 'null'
 
 
 class UndefinedValue(LanguageValue):
-    # TODO: make singleton
+    # TODO: make a singleton
     def bool(self):
         return False
 
     def num(self):
         return float('nan')
 
-    def obj(self, name):
-        raise AttributeError('Reference to undefined')
+    def obj(self, lineno):
+        raise CastError(self, 'object', lineno)
 
     def str(self):
         return 'undefined'
@@ -652,7 +659,7 @@ _VALUE_TYPE_MAP = {
 }
 
 
-def typecheck(value, var_type):
+def typecheck(lineno, name, value, var_type):
     if isinstance(value, NullValue) or isinstance(value, UndefinedValue):
         return
     cur_type = type(value)
@@ -663,7 +670,7 @@ def typecheck(value, var_type):
         cls_name = value.cls.name
         if cls_name == var_type:
             return
-    raise TypeMismatchError(value, var_type)
+    raise TypeMismatchError(name, value, var_type, lineno)
 
 
 class _Return(Exception):
@@ -684,57 +691,65 @@ class Variable(object):
 # Errors
 
 
+# TODO: make lineno first parameter
+
 class SemanticError(Exception):
-    def __init__(self, msg, lineno=0): # TODO: remove default value
-        msg = 'Semantic error: {}, line #{}'.format(msg, lineno)
+    def __init__(self, msg, lineno):
+        msg = 'Semantic error on or before line {}: {}'.format(lineno, msg)
         super(SemanticError, self).__init__(msg)
 
 
 class NotAFunctionError(SemanticError):
-    def __init__(self, name):
+    def __init__(self, name, lineno):
         msg = '{} is not a function'.format(name)
-        super(NotAFunctionError, self).__init__(msg)
+        super(NotAFunctionError, self).__init__(msg, lineno)
 
 
 class NotAClassError(SemanticError):
-    def __init__(self, name):
+    def __init__(self, name, lineno):
         msg = '{} is not a class'.format(name)
-        super(NotAClassError, self).__init__(msg)
+        super(NotAClassError, self).__init__(msg, lineno)
+
+
+class CastError(SemanticError):
+    def __init__(self, value, value_type, lineno):
+        msg = 'cannot cast {} to {}'.format(value, value_type)
+        super(CastError, self).__init__(msg, lineno)
 
 
 class UndeclaredVariableError(SemanticError):
-    def __init__(self, name):
+    def __init__(self, name, lineno):
         msg = 'operation with undeclared variable "{}"'.format(name)
-        super(UndeclaredVariableError, self).__init__(msg)
+        super(UndeclaredVariableError, self).__init__(msg, lineno)
 
 
 class MultipleConstructorsError(SemanticError):
-    def __init__(self, cls_name):
+    def __init__(self, cls_name, lineno):
         msg = 'multiple constructors in class {}'.format(cls_name)
-        super(UndeclaredVariableError, self).__init__(msg)
+        super(UndeclaredVariableError, self).__init__(msg, lineno)
 
 
 class NoMemberError(SemanticError):
-    def __init__(self, cls_name, member_name):
-        msg = 'instance of class {} has not member {}'.format(cls_name, member_name)
-        super(NoMemberError, self).__init__(msg)
+    def __init__(self, cls_name, member_name, lineno):
+        msg = 'instance of class {} has no member {}'.format(cls_name, member_name)
+        super(NoMemberError, self).__init__(msg, lineno)
 
 
 class UndeclaredClassError(SemanticError):
-    def __init__(self, name):
+    def __init__(self, name, lineno):
         msg = 'specifying undeclared class "{}"'.format(name)
-        super(UndeclaredVariableError, self).__init__(msg)
+        super(UndeclaredVariableError, self).__init__(msg, lineno)
 
 
 class TypeMismatchError(SemanticError):
-    def __init__(self, value, var_type):
-        msg = 'value {} must be of type {}'.format(value, var_type)
-        super(TypeMismatchError, self).__init__(msg)
+    def __init__(self, name, value, var_type, lineno):
+        msg = 'variable {} must be of type {}, got {}'.format(name, var_type, value)
+        super(TypeMismatchError, self).__init__(msg, lineno)
 
 
 class ParameterNumberError(SemanticError):
-    def __init__(self, func_name, expected, got):
+    def __init__(self, func_name, expected, got, lineno):
         msg = 'invalid number of parameters for function {}: expected {}, got {}'.format(
             func_name, expected, got
         )
-        super(ParameterNumberError, self).__init__(msg)
+        super(ParameterNumberError, self).__init__(msg, lineno)

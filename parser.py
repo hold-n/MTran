@@ -5,21 +5,15 @@ import semantics
 
 def analyze(data):
     analyzer = syntax.analyzer
-    try:
-        result = analyzer.parse(data)
-    except syntax.SyntaxError as e:
-        print e.message
-        result = None
-    return result
+    return analyzer.parse(data)
 
 
 def interpret(data):
     root_node = analyze(data)
-    if root_node is not None:
-        try:
-            root_node.run()
-        except semantics.SemanticError as e:
-            print e.message
+    try:
+        root_node.run()
+    except semantics.SemanticError as e:
+        print e.message
 
 
 def tokenize(data):

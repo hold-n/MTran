@@ -23,9 +23,12 @@ precedence = (
 # TODO: allow implicit 'any' => remove rule and token for constructor
 # TODO: support for 'for' loop
 
+# NOTE: line number supplied by lexer refers to line after the expression
+
+
 def p_root(p):
     "root : language_item_list"
-    p[0] = ScopeNode(p[1])
+    p[0] = ScopeNode(p.lexer.lineno, p[1])
 
 def p_language_item_list_empty(p):
     "language_item_list : empty"
@@ -38,7 +41,7 @@ def p_language_item_list(p):
 
 def p_language_item_block(p):
     "language_item_block : '{' language_item_list '}'"
-    p[0] = ScopeNode(p[2])
+    p[0] = ScopeNode(p.lexer.lineno, p[2])
 
 def p_language_item(p):
     '''language_item : function_decl
@@ -63,11 +66,11 @@ def p_procedural_item_list(p):
 
 def p_procedural_item_block(p):
     "procedural_item_block : '{' procedural_item_list '}'"
-    p[0] = ScopeNode(p[2])
+    p[0] = ScopeNode(p.lexer.lineno, p[2])
 
 def p_statement_return(p):
     "statement : RETURN expression"
-    p[0] = ReturnNode(p[2])
+    p[0] = ReturnNode(p.lexer.lineno, p[2])
 
 def p_statement(p):
     '''statement : var_decl
@@ -77,7 +80,7 @@ def p_statement(p):
 
 def p_statement_expr(p):
     "statement : expression"
-    p[0] = ExpressionStatementNode(p[1])
+    p[0] = ExpressionStatementNode(p.lexer.lineno, p[1])
 
 def p_expression_trivial(p):
     "expression : term"
@@ -85,11 +88,11 @@ def p_expression_trivial(p):
 
 def p_expression_negate(p):
     "expression : '!' term"
-    p[0] = NegateExpression(p[2])
+    p[0] = NegateExpression(p.lexer.lineno, p[2])
 
 def p_expression_negative(p):
     "expression : '-' term %prec UMINUS"
-    p[0] = NegativeExpression(p[2])
+    p[0] = NegativeExpression(p.lexer.lineno, p[2])
 
 def p_expression_comparison(p):
     '''expression : expression '<' expression
@@ -99,17 +102,17 @@ def p_expression_comparison(p):
                     | expression STRICT_EQUALS expression
                     | expression STRICT_NOT_EQUAL expression
                     '''
-    p[0] = ComparisonExpression(p[2], p[1], p[3])
+    p[0] = ComparisonExpression(p.lexer.lineno, p[2], p[1], p[3])
 
 def p_expression_bool(p):
     '''expression : expression AND expression
                     | expression OR expression'''
-    p[0] = BooleanOperationExpression(p[2], p[1], p[3])
+    p[0] = BooleanOperationExpression(p.lexer.lineno, p[2], p[1], p[3])
 
 def p_expression_arithm(p):
     '''expression : expression '+' term
                     | expression '-' term'''
-    p[0] = ArithmeticOperationExpression(p[2], p[1], p[3])
+    p[0] = ArithmeticOperationExpression(p.lexer.lineno, p[2], p[1], p[3])
 
 def p_term_trivial(p):
     "term : operand"
@@ -118,19 +121,19 @@ def p_term_trivial(p):
 def p_term(p):
     '''term : term '*' operand
             | term '/' operand'''
-    p[0] = ArithmeticOperationExpression(p[2], p[1], p[3])
+    p[0] = ArithmeticOperationExpression(p.lexer.lineno, p[2], p[1], p[3])
 
 def p_operand_primitive(p):
     "operand : primitive"
-    p[0] = PrimitiveValueExpression(p[1])
+    p[0] = PrimitiveValueExpression(p.lexer.lineno, p[1])
 
 def p_operand_this(p):
     "operand : THIS"
-    p[0] = ThisExpression()
+    p[0] = ThisExpression(p.lexer.lineno)
 
 def p_operand_var(p):
     "operand : ID"
-    p[0] = VariableExpression(p[1])
+    p[0] = VariableExpression(p.lexer.lineno, p[1])
 
 def p_operand(p):
     '''operand : function_call
@@ -167,19 +170,19 @@ def p_operand_complex(p):
 def p_member_access(p):
     '''member_access : operand '.' ID
                         | member_access '.' ID'''
-    p[0] = MemberAccessExpression(p[1], p[3])
+    p[0] = MemberAccessExpression(p.lexer.lineno, p[1], p[3])
 
 def p_assignment(p):
     "assignment : ID '=' expression"
-    p[0] = VariableAssignmentNode(p[1], p[3])
+    p[0] = VariableAssignmentNode(p.lexer.lineno, p[1], p[3])
 
 def p_assignment(p):
     "assignment : var_decl '=' expression"
-    p[0] = DeclaredVariableAssignmentNode(p[1], p[3])
+    p[0] = DeclaredVariableAssignmentNode(p.lexer.lineno, p[1], p[3])
 
 def p_assignment_member(p):
     "assignment : member_access '=' expression"
-    p[0] = MemberAssignmentNode(p[1], p[3])
+    p[0] = MemberAssignmentNode(p.lexer.lineno, p[1], p[3])
 
 def p_if(p):
     '''if : if_no_else
@@ -188,7 +191,7 @@ def p_if(p):
 
 def p_if_no_else(p):
     "if_no_else : IF '(' expression ')' procedural_item_block"
-    p[0] = IfNode(p[3], p[5])
+    p[0] = IfNode(p.lexer.lineno, p[3], p[5])
 
 def p_if_else(p):
     "if_else : if_no_else ELSE procedural_item_block"
@@ -201,15 +204,15 @@ def p_loop(p):
 
 def p_while_loop(p):
     "while_loop : WHILE '(' expression ')' procedural_item_block"
-    p[0] = WhileLoopNode(p[3], p[5])
+    p[0] = WhileLoopNode(p.lexer.lineno, p[3], p[5])
 
 def p_function_decl(p):
     "function_decl : FUNCTION function"
-    p[0] = FunctionDeclarationNode(p[2])
+    p[0] = FunctionDeclarationNode(p.lexer.lineno, p[2])
 
 def p_function(p):
     "function : ID '(' param_list ')' ':' type language_item_block"
-    p[0] = FunctionValue(p[1], p[3], p[6], p[7])
+    p[0] = FunctionValue(p.lexer.lineno, p[1], p[3], p[6], p[7])
 
 def p_param_list_empty(p):
     "param_list : empty"
@@ -226,7 +229,7 @@ def p_param_list(p):
 
 def p_function_call(p):
     "function_call : operand '(' operand_list ')'"
-    p[0] = FunctionCallExpression(p[1], p[3])
+    p[0] = FunctionCallExpression(p.lexer.lineno, p[1], p[3])
 
 def p_operand_list_empty(p):
     "operand_list : empty"
@@ -251,7 +254,7 @@ def p_type(p):
 
 def p_var_decl(p):
     "var_decl : LET var"
-    p[0] = VariableDeclarationNode(p[2])
+    p[0] = VariableDeclarationNode(p.lexer.lineno, p[2])
 
 def p_var(p):
     "var : ID ':' type"
@@ -259,7 +262,7 @@ def p_var(p):
 
 def p_class(p):
     "class : CLASS ID '{' member_list '}'"
-    p[0] = ClassDeclarationNode(p[2], p[4])
+    p[0] = ClassDeclarationNode(p.lexer.lineno, p[2], p[4])
 
 def p_member_list_empty(p):
     "member_list : empty"
@@ -278,26 +281,27 @@ def p_member(p):
 
 def p_constructor(p):
     "constructor : CONSTRUCTOR '(' param_list ')' language_item_block"
-    p[0] = FunctionValue(p[1], p[3], None, p[5])
+    p[0] = FunctionValue(p.lexer.lineno, p[1], p[3], None, p[5])
 
 def p_new_instance(p):
     "new_instance : NEW ID '(' operand_list ')'"
-    p[0] = NewInstanceExpression(p[2], p[4])
+    p[0] = NewInstanceExpression(p.lexer.lineno, p[2], p[4])
 
 def p_print(p):
     "print : CONSOLE_LOG '(' expression ')'"
-    p[0] = PrintNode(p[3])
+    p[0] = PrintNode(p.lexer.lineno, p[3])
 
 def p_empty(p):
     'empty : '
     pass
+
 
 def p_error(p):
     # TODO: it's possible to clarify error based on token type
     if p is None:
         print 'Syntax Error: unexpected end of file'
     print "Syntax error on line {}. Unexpected token of type '{}': {}".format(
-        lineno, tok_type, value
+        p.lineno, p.type, p.value
     )
 
 
