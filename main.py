@@ -39,7 +39,7 @@ def main():
 
 
 def _print_tree(node, indent=0):
-    pad = '  ' * indent
+    pad = '\t' * indent
     print pad, node
     next_indent = indent + 1
     for child in node.iterchildren():

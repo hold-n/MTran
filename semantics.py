@@ -1,3 +1,4 @@
+# TODO: ! add support for void functions !
 # TODO: override __repr__ everywhere properly instead of node_type => remove 'type'?
 # TODO: split into multiple files
 # TODO: get rid of 'name' in Variable?
@@ -76,8 +77,7 @@ class ScopeNode(LanguageItemNode):
         super(ScopeNode, self).__init__(lineno, 'block')
         self.scope = {}
         self._this = None
-        for statement in statements:
-            self.add_child(statement)
+        self.add_children(statements)
 
     def get_this(self):
         if self._this is not None:
@@ -260,8 +260,8 @@ class VariableExpression(ExpressionNode):
     def calculate(self):
         return self.getvar(self._name).value
 
-    def __repr__(self):
-        return 'variable {}'.format(self._name)
+    # def __repr__(self):
+        # return 'variable {}'.format(self._name)
 
 
 class NegateExpression(ExpressionNode):
@@ -377,7 +377,7 @@ class FunctionCallExpression(ExpressionNode):
     def _get_func(self):
         func = self._children[0].calculate().obj(self.lineno)
         if not isinstance(func, FunctionValue):
-            raise NotAFunctionError(self._name, self.lineno)
+            raise NotAFunctionError(func, self.lineno)
         return func
 
     def _get_this(self):
@@ -693,6 +693,7 @@ class Variable(object):
 
 # TODO: make lineno first parameter
 
+
 class SemanticError(Exception):
     def __init__(self, msg, lineno):
         msg = 'Semantic error on or before line {}: {}'.format(lineno, msg)
@@ -700,8 +701,8 @@ class SemanticError(Exception):
 
 
 class NotAFunctionError(SemanticError):
-    def __init__(self, name, lineno):
-        msg = '{} is not a function'.format(name)
+    def __init__(self, value, lineno):
+        msg = '{} is not a function'.format(value)
         super(NotAFunctionError, self).__init__(msg, lineno)
 
 
