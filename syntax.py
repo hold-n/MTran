@@ -295,26 +295,10 @@ def p_empty(p):
 def p_error(p):
     # TODO: it's possible to clarify error based on token type
     if p is None:
-        raise SyntaxEofError()
-    raise SyntaxTokenError(p.lineno, p.type, p.value)
+        print 'Syntax Error: unexpected end of file'
+    print "Syntax error on line {}. Unexpected token of type '{}': {}".format(
+        lineno, tok_type, value
+    )
 
 
 analyzer = yacc.yacc()
-
-
-class SyntaxError(Exception):
-    pass
-
-
-class SyntaxEofError(SyntaxError):
-    def __init__(self):
-        msg = 'Syntax Error: unexpected end of file'
-        super(SyntaxEofError, self).__init__(msg)
-
-
-class SyntaxTokenError(SyntaxError):
-    def __init__(self, lineno, tok_type, value):
-        msg = "Syntax error on line {}. Unexpected token of type '{}': {}".format(
-            lineno, tok_type, value
-        )
-        super(SyntaxTokenError, self).__init__(msg)
