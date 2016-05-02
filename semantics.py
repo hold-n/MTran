@@ -1,7 +1,7 @@
 # TODO: ! supply line numbers !
 
-# TODO: split in multiple files
 # TODO: override __repr__ everywhere properly instead of node_type => remove 'type'?
+# TODO: split into multiple files
 # TODO: get rid of 'name' in Variable?
 
 class Node(object):
@@ -516,7 +516,8 @@ class ObjectValue(LanguageContainerValue):
     def __setitem__(self, name, value):
         var = self.value.get(name)
         if var is None:
-            raise UndeclaredVariableError(name)
+            cls_name = self.cls.name if self.cls is not None else 'None'
+            raise NoMemberError(cls_name, name)
         typecheck(value, var.type)
         var.value = value
 
@@ -579,8 +580,7 @@ class ClassValue(ObjectValue):
 
     def instantiate(self, values):
         result = self._instantiate()
-        if self._constructor is not None:
-            self._constructor.call(values, result)
+        self._constructor.call(values, result)
         return result
 
     def _instantiate(self):
@@ -599,11 +599,17 @@ class ClassValue(ObjectValue):
             else:
                 var = Variable(method.name, method.gettype(), method)
                 self[method.name] = var
+        self._try_add_constructor()
 
     def _register_constructor(self, method):
         if self._constructor is not None:
-            raise SemanticError('Multiple constructors in a class')
+            raise MultipleConstructorsError(self.name)
         self._constructor = method
+
+    def _try_add_constructor(self):
+        if self._constructor is None:
+            block = ScopeNode([])
+            self._constructor = FunctionValue('constructor', [], None, block)
 
 
 class NullValue(LanguageValue):
@@ -702,6 +708,18 @@ class UndeclaredVariableError(SemanticError):
         super(UndeclaredVariableError, self).__init__(msg)
 
 
+class MultipleConstructorsError(SemanticError):
+    def __init__(self, cls_name):
+        msg = 'multiple constructors in class {}'.format(cls_name)
+        super(UndeclaredVariableError, self).__init__(msg)
+
+
+class NoMemberError(SemanticError):
+    def __init__(self, cls_name, member_name):
+        msg = 'instance of class {} has not member {}'.format(cls_name, member_name)
+        super(NoMemberError, self).__init__(msg)
+
+
 class UndeclaredClassError(SemanticError):
     def __init__(self, name):
         msg = 'specifying undeclared class "{}"'.format(name)
@@ -719,4 +737,4 @@ class ParameterNumberError(SemanticError):
         msg = 'invalid number of parameters for function {}: expected {}, got {}'.format(
             func_name, expected, got
         )
-        super(ParameterError, self).__init__(msg)
+        super(ParameterNumberError, self).__init__(msg)
