@@ -220,7 +220,7 @@ class WhileLoopNode(LanguageItemNode):
         self.add_child(condition)
         self.add_child(block)
 
-    def run():
+    def run(self):
         while self._children[0].calculate().bool():
             self._children[1].run()
 
@@ -315,7 +315,10 @@ class ArithmeticOperationExpression(BinaryOperationExpression):
         elif self._op == '*':
             result = lvalue * rvalue
         elif self._op == '/':
-            result = lvalue / rvalue
+            try:
+                result = lvalue / rvalue
+            except ZeroDivisionError:
+                raise DivisionByZeroError(self.lineno)
         return NumberValue(result)
 
 
@@ -754,3 +757,9 @@ class ParameterNumberError(SemanticError):
             func_name, expected, got
         )
         super(ParameterNumberError, self).__init__(msg, lineno)
+
+
+class DivisionByZeroError(SemanticError):
+    def __init__(self, lineno):
+        msg = 'zero division'
+        super(DivisionByZeroError, self).__init__(msg, lineno)

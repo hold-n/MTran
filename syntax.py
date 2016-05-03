@@ -176,7 +176,7 @@ def p_assignment(p):
     "assignment : ID '=' expression"
     p[0] = VariableAssignmentNode(p.lexer.lineno, p[1], p[3])
 
-def p_assignment(p):
+def p_assignment_decl(p):
     "assignment : var_decl '=' expression"
     p[0] = DeclaredVariableAssignmentNode(p.lexer.lineno, p[1], p[3])
 
